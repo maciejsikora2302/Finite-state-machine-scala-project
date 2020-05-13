@@ -1,0 +1,9 @@
+Terminals:
+a,b,c
+Non terminals:
+S,A,B
+Productions:
+S -> aA
+S -> bB
+A -> c
+B -> c
