@@ -7,7 +7,9 @@ object StatsActor{
 }
 
 class StatsActor extends Actor{
+  var processedInts = 0
+  var processedStrings = 0
   override def receive: Receive = {
-    case s:String => println("Whata")
+    case s => println("Statistics stage: IAMALIVEHAHAHAHHA")
   }
 }

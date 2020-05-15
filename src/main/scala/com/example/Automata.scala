@@ -31,7 +31,7 @@ class Automata() {
     var pos = 0
 
     def nextStage(pos: Int = 0, state: State= states('S')): Boolean = {
-      println(state.getID())
+//      println(state.getID())
       if (state.getID() == '\0' && pos == word.length) true
       else {
         val nonCompleteWordPart = word.slice(pos, word.length)

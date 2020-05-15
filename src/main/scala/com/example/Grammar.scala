@@ -13,7 +13,7 @@ object Grammar {
     array.foreach({
       exp => {
         if (!nonTerminals.contains(exp.getFrom()))
-          println("This non terminal doesn't declared: " + exp.getFrom())
+          println("This non terminal isn't declared: " + exp.getFrom())
         exp.getTo().foreach({
           term =>
             if (!terminals.contains(term) && !nonTerminals.contains(term))

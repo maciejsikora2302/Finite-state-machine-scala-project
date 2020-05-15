@@ -6,31 +6,30 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.util.Random
-import com.example.EvaluateActor._
 
-object EvaluateActor {
-
-  case class EvaluateStr(s: String, destination: ActorRef)
-
-  case class EvaluateInt(value: Int, destination: ActorRef)
-
-  case class CheckWordInGrammar(word: String, automata: Automata)
-
+class IntActorProcess(stats: ActorRef) extends Actor {
+  def receive: Receive = {
+    case value: Int =>
+      println("Process stage: I'm a IntActorProcess and I'm working on value (" + value.toString + "). Here are some math operations on it: "
+        + 2*value + ", "
+        + value / 2 + ", "
+        + math.sqrt(value) + ", "
+        + value*value + "."
+      )
+      stats ! 1
+  }
 }
 
-class EvaluateActor extends Actor {
+class WordActorProcess extends Actor{
   def receive = {
-    case EvaluateStr(s, destination) => destination ! "What is it: " + s
-    case EvaluateInt(value, destination) => destination ! value * 2
-    case CheckWordInGrammar(word, automata) =>
+    case (word: String, automata: Automata) =>
       val result:Boolean = automata.checkWord(word)
-      println(result)
+      println("Process stage: I'm a WordActor and I have got word (" + word + "). Here is a result of word check: " + result)
   }
 }
 
 
 class MainHandler(system: ActorSystem) extends Actor {
-
   var gramatics: Array[Grammar] = Array.empty[Grammar]
   var automats: Array[Automata] = Array.empty[Automata]
 
@@ -38,16 +37,15 @@ class MainHandler(system: ActorSystem) extends Actor {
 
   def receive: Receive = {
     case value: Int =>
-      system.actorOf(Props(new EvaluateActor)) ! EvaluateInt(value, sender())
-    case s: String =>
-      system.actorOf(Props(new EvaluateActor())) ! EvaluateStr(s, sender())
+      system.actorOf(Props(new IntActorProcess(statActor))) ! value
     case grammar: Grammar =>
       gramatics :+= grammar
       automats :+= Automata(grammar)
     case (grammarID: Int, word: String) =>
       if (grammarID >= gramatics.length) sender() ! "That grammar ID doesn't exist\n"
       else {
-        system.actorOf(Props(new EvaluateActor)) ! CheckWordInGrammar(word,automats(grammarID))
+        statActor ! word
+        system.actorOf(Props(new WordActorProcess)) ! (word,automats(grammarID))
       }
   }
 
@@ -55,32 +53,46 @@ class MainHandler(system: ActorSystem) extends Actor {
 
 class GenerateRequestActor(mainHandler: ActorRef, id: Int) extends Actor {
   override def receive: Receive = {
-    case s: String =>
-      println("ID " + id + "  " + s)
-      Thread.sleep(2000)
-      mainHandler ! Random.nextInt(100)
-    case value: Int =>
-      println("ID " + id + "  " + value)
-      println(value)
-      Thread.sleep(2000)
-      mainHandler ! Random.alphanumeric.take(value % 10).mkString
+    case "Start" =>
+      println("Generate stage: Generator(" + id + ")  is starting to create traffic")
+      val rand = scala.util.Random
+      while(true){
+        val probability = rand.nextInt(100)
+        if (probability % 2 == 0){
+          var word = (97 + rand.nextInt(3)).asInstanceOf[Char].toString //word now consists of letter "a" "b" or "c"
+          word += (97 + rand.nextInt(3)).asInstanceOf[Char].toString //adding at the end "a" "b" or "c" so that we can have a possibility of a word that is accepted by grammar
+          val sleepTime = rand.nextInt(3000)
+          println("Generate stage: Generator(" + id + ") generated random word ("+ word + ") for grammar. Going to sleep for " + sleepTime + " seconds.")
+          mainHandler ! (0,word)
+          Thread.sleep(sleepTime)
+        }else{
+          val i = rand.nextInt(1000)
+          val sleepTime = rand.nextInt(3000)
+          println("Generate stage: Generator(" + id + ") generated random int (" + i + ") for processing. Going to sleep for " + sleepTime + " seconds.")
+          mainHandler ! i
+          Thread.sleep(sleepTime)
+        }
+      }
   }
-
 }
+
+
 
 object AkkaQuickstart extends App {
 
+  val numberOfActors = 6
+
   implicit val system: ActorSystem = ActorSystem()
   implicit val ec: ExecutionContextExecutor = system.dispatcher
-    val handler = system.actorOf(Props(new MainHandler(system)),"Handler")
-    val generator = system.actorOf(Props(new GenerateRequestActor(handler,1)),"Generator")
-    val generator2 = system.actorOf(Props(new GenerateRequestActor(handler,2)),"Generator2")
-  //  generator ! "Test"
-  //  Thread.sleep(1000)
-  //  generator2 ! "Test2"
+  val handler = system.actorOf(Props(new MainHandler(system)),"Handler")
+  val generator = system.actorOf(Props(new GenerateRequestActor(handler,1)),"Generator")
   val data = ReadFile("/Example.txt").getProperData()
   val grammar = Grammar(data._1, data._2, data._3)
   handler ! grammar
-  handler ! (0,"ac")
-  handler ! (0,"ab")
+
+  Thread.sleep(1000) //sleep for 1s before starting generating traffic
+
+  for( i <- 1 to numberOfActors){
+    system.actorOf(Props(new GenerateRequestActor(handler, i))) ! "Start"
+  }
 }
